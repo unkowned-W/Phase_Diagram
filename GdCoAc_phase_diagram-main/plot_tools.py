@@ -31,7 +31,7 @@ def create_prediction_grid(fixed_dims, fixed_vals, resolution=300):
     
     return X_grid, grid_shape
 
-def plot_performance(all_performance):
+def plot_performance(all_performance, graph_path):
     mean_perf = all_performance.mean(axis=0)
     std_perf = all_performance.std(axis=0)
 
@@ -45,14 +45,14 @@ def plot_performance(all_performance):
     plt.ylabel("Performance", fontsize = 18)
     plt.yticks(fontsize = 12)
     plt.tight_layout()
-    plt.savefig("./tree_performance.png", dpi = 300)
+    plt.savefig(graph_path, dpi = 300)
     plt.show()
 
     print(mean_perf)
     print(std_perf)
     return mean_perf, std_perf
 
-def plot_feature_importance(feature_importance, feature_names):
+def plot_feature_importance(feature_importance, feature_names, graph_path):
     mean_importance = feature_importance.mean(axis=0)
     std_importance = feature_importance.std(axis=0)
 
@@ -63,7 +63,7 @@ def plot_feature_importance(feature_importance, feature_names):
     plt.ylabel("Feature Importance", fontsize = 18)
     plt.yticks(fontsize = 12)
     plt.tight_layout()
-    plt.savefig("./feature_importance_from_tree.png", dpi = 300)
+    plt.savefig(graph_path, dpi = 300)
     plt.show()
 
     print(mean_importance)
