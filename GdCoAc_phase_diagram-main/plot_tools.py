@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import LinearSegmentedColormap
 
 def create_prediction_grid(fixed_dims, fixed_vals, resolution=300):
     """创建四维预测网格，其中两个维度固定为具体值，两个维度在[0,1]上均匀布点"""
@@ -31,7 +32,7 @@ def create_prediction_grid(fixed_dims, fixed_vals, resolution=300):
     
     return X_grid, grid_shape
 
-def plot_performance(all_performance, graph_path):
+def plot_performance(all_performance):
     mean_perf = all_performance.mean(axis=0)
     std_perf = all_performance.std(axis=0)
 
@@ -45,14 +46,13 @@ def plot_performance(all_performance, graph_path):
     plt.ylabel("Performance", fontsize = 18)
     plt.yticks(fontsize = 12)
     plt.tight_layout()
-    plt.savefig(graph_path, dpi = 300)
     plt.show()
 
     print(mean_perf)
     print(std_perf)
     return mean_perf, std_perf
 
-def plot_feature_importance(feature_importance, feature_names, graph_path):
+def plot_feature_importance(feature_importance, feature_names):
     mean_importance = feature_importance.mean(axis=0)
     std_importance = feature_importance.std(axis=0)
 
@@ -63,7 +63,6 @@ def plot_feature_importance(feature_importance, feature_names, graph_path):
     plt.ylabel("Feature Importance", fontsize = 18)
     plt.yticks(fontsize = 12)
     plt.tight_layout()
-    plt.savefig(graph_path, dpi = 300)
     plt.show()
 
     print(mean_importance)
@@ -122,6 +121,112 @@ def plot_phase_diagram(model, X_grid, grid_shape, X, Y, dimension_index, feature
     )
     
     return fig, ax
+
+def plot_phase_diagram_cascade(model1, model2, X_grid, grid_shape, X1, Y1, X2, Y2, dimension_index, feature_names):
+    """提取特定维度进行绘图"""
+    # 确定用于绘图的两个维度
+    dim1, dim2 = dimension_index
+    
+    # 提取X1、X2用于绘图的维度
+    X1_plot = X1[:, [dim1, dim2]] if X1.shape[1] > 2 else X1
+    X2_plot = X2[:, [dim1, dim2]] if X2.shape[1] > 2 else X2
+    
+    # 使用第一个模型预测概率
+    score1 = model1.predict_proba(X_grid)[:, 1]
+    
+    # 创建最终概率数组
+    final_prob_grid = np.zeros_like(score1)
+    
+    # 找出需要第二个模型预测的点（第一个模型预测概率>=0.5的点）
+    mask_model2 = score1 >= 0.5
+    if np.any(mask_model2):
+        # 只对需要第二个模型预测的点进行预测
+        X_grid_model2 = X_grid[mask_model2]
+        score2 = model2.predict_proba(X_grid_model2)[:, 1]
+        final_prob_grid[mask_model2] = score2
+    
+    # 第一个模型预测概率<0.5的点保持原值（0-0.5之间）
+    mask_model1 = score1 < 0.5
+    final_prob_grid[mask_model1] = score1[mask_model1]
+    
+    fig = plt.figure(figsize=(8, 8), dpi=300)
+    ax = fig.add_axes([0.12, 0.09, 0.7, 0.7])
+    
+    # 重新形状化为网格形状（注意转置以正确显示）
+    probability_grid = final_prob_grid.reshape(grid_shape).T
+    
+    # 计算显示范围（假设自由维度在[0,1]范围内）
+    extent = [0, 1, 0, 1]
+    
+    # 创建自定义颜色映射：蓝色(0-0.25) -> 绿色(0.25-0.75) -> 红色(0.75-1.0)
+    colors_complex = ['darkblue', 'blue', 'cyan', 'green', 'yellow', 'orange', 'red', 'darkred']
+    nodes_complex = [0.0, 0.2, 0.35, 0.5, 0.65, 0.8, 0.9, 1.0]
+    cmap_custom = LinearSegmentedColormap.from_list("rainbow_cascade", list(zip(nodes_complex, colors_complex)))
+    
+    im = ax.imshow(
+        probability_grid,
+        cmap=cmap_custom,
+        origin='lower',
+        aspect='auto',
+        extent=extent,
+        vmin=0.0,
+        vmax=1.0,
+        zorder=5
+    )
+    
+    cb = plt.colorbar(im)
+    cb.set_label('Probability', fontsize=18)
+    cb.ax.text(1.5, 0.1, 'Blue: Model1<0.5', transform=cb.ax.transAxes)
+    cb.ax.text(1.5, 0.5, 'Green: Boundary', transform=cb.ax.transAxes)
+    cb.ax.text(1.5, 0.9, 'Red: Both≥0.5', transform=cb.ax.transAxes)
+    ax.set_xlabel(feature_names[dim1], fontsize=18)
+    ax.set_ylabel(feature_names[dim2], fontsize=18)
+    
+    # 绘制原始数据点
+    if len(X1_plot) > 0:
+        X1_blue = X1_plot[Y1 == 0]
+        if len(X1_blue) > 0:
+            ax.scatter(
+                X1_blue[:, 0], 
+                X1_blue[:, 1], 
+                edgecolors='black', 
+                linewidths=0.5, 
+                c='blue',
+                s=50,
+                marker='o',
+                label='Model1: Y=0',
+                zorder=10
+            )
+    
+    if len(X2_plot) > 0:
+        X2_green = X2_plot[Y2 == 0]
+        if len(X2_green) > 0:
+            ax.scatter(
+                X2_green[:, 0], 
+                X2_green[:, 1], 
+                edgecolors='black', 
+                linewidths=0.5, 
+                c='green',
+                s=50,
+                marker='o',
+                label='Model2: Y=0',
+                zorder=11
+            )
+        
+        X2_red = X2_plot[Y2 == 1]
+        if len(X2_red) > 0:
+            ax.scatter(
+                X2_red[:, 0], 
+                X2_red[:, 1], 
+                edgecolors='black', 
+                linewidths=0.5, 
+                c='red',
+                s=50,
+                marker='o',
+                label='Model2: Y=1',
+                zorder=12
+            )
+    
 
 def plot_batch_performance(
     mean_value,  # 核心输入：批次×指标的均值（二维数组/列表）
